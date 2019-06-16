@@ -1,0 +1,63 @@
+sudo yum update -y
+
+mkdir -p ~/testdocker/jenkins
+
+cd ~/testdocker/jenkins
+
+cat Dockerfile
+	from jenkins/jenkins:lts
+	env mavenVer apache-maven-3.6.1
+	env MAVEN_HOME /usr/local/${mavenVer}
+	env PATH=${PATH}:${MAVEN_HOME}/bin
+	copy ${mavenVer} ${MAVEN_HOME}
+
+docker build -t myjenkins .
+
+#maven: download maven
+#maven: url of download link from maven.apache.org>
+wget http://mirror.rise.ph/apache/maven/maven-3/3.6.1/binaries/apache-maven-3.6.1-bin.tar.gz
+tar xvfz apache-maven-3.6.1-bin.tar.gz
+sudo chmod 755 apache-maven-3.6.1
+
+sudo mkdir -p /var/lib/tomcat
+
+wsdir=~/testdocker/jenkins/workspace
+
+sudo mkdir -p ${wsdir}
+
+sudo useradd -u 1000 jenkins
+
+sudo chown -R jenkins:jenkins workspace
+
+docker run -d -it --name=myjenkins -v ~/testdocker/jenkins/workspace:/var/jenkins_home/workspace -p 8080:8080 -p 50000:50000 myjenkins
+
+docker run -d -it --name=tomcat -v /var/lib/tomcat:/var/lib/tomcat -p 8081:8080 tomcat
+
+tomcat_cont=tomcat
+
+docker cp ${tomcat_cont}:/usr/local/tomcat/conf/tomcat-users.xml .
+
+#edit the file
+
+docker cp tomcat-users.xml ${tomcat_cont}:/usr/local/tomcat/conf/
+
+#jenkins: 
+#password at /var/lib/jenkins/secrets/initialAdminPassword
+
+#create admin user
+#Manage Jenkins --> Global Tool Configuration
+#	add JAVA_HOME
+#	add git, if not found
+#	add MAVEN_HOME
+
+#add to new project https://github.com/frankatacn/time-tracker.git
+#Install "Maven Integration" plugin
+#Install "Config File Provider" plugin
+
+#build your project
+
+projname=time-tracker
+
+# copy from workspace to ${tomcat_cont}
+docker cp ${wsdir}/${projname}/web/target/${projname}*.war ${tomcat_cont}:/usr/local/tomcat/webapps/${projname}.war
+
