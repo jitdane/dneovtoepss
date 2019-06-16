@@ -1,0 +1,84 @@
+sudo yum update -y
+
+sudo pip install ansible
+#once installed, /usr/local/bin/ansible
+
+mkdir -p ~/testansible/roles
+
+cd testansible
+
+#first role=basic
+#tasks is always a subfolder
+mkdir -p roles/basic/tasks roles/basic/files
+
+cd roles/basic/tasks
+
+#it is always 'main.yml'
+vi main.yml
+- name: "Installing docker"
+  yum: pkg=ecs-init state=installed
+
+cd ~/testansible
+
+vi playbook.yml
+---
+- hosts: all
+  become: true
+  roles:
+  - basic
+
+[ec2-user@ip-172-31-24-8 testansible]$ ansible-playbook ~/testansible/playbook.yml
+
+PLAY [all] *********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [18.136.198.105]
+ok: [18.139.117.110]
+
+TASK [basic : Installing docker] ***********************************************
+changed: [18.136.198.105]
+changed: [18.139.117.110]
+
+PLAY RECAP *********************************************************************
+18.136.198.105             : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+18.139.117.110             : ok=2    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+[ec2-user@ip-172-31-24-8 testansible]$ cat roles/basic/tasks/main.yml
+- name: update all packages first (yum update -y)
+  yum:
+    name: '*'
+    state: latest
+
+- name: "Installing required packages"
+  yum: pkg={{ item }} state=installed
+  with_items:
+  - ecs-init
+  - git
+  - vim
+  - tomcat8
+
+- name: start tomcat and configure
+  service:
+    name: tomcat8
+    state: started
+    enabled: yes
+
+- name: Copy the time-tracker app to the nodes
+  copy:
+    src: ../files/time-tracker.war
+    dest: /var/lib/tomcat8/webapps/time-tracker.war
+    owner: root
+    group: root
+    mode: u=rw,go=r
+    backup: yes
+
+
+- name: "Adding bashrc"
+  copy:
+    src: ../files/bash.bashrc
+    dest: /etc/bash.bashrc
+    owner: root
+    group: root
+    mode: u=rw,go=r
+
+#the bash.bashrc file constains an ENV variable GREETME
