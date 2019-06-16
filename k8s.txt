@@ -1,0 +1,36 @@
+sudo yum update -y
+
+sudo pip install awscli --upgrade --user
+
+#Configure Your AWS CLI Credentials
+$ aws configure
+AWS Access Key ID [None]: <>
+AWS Secret Access Key [None]: <>
+Default region name [None]: <>
+Default output format [None]: json/text/table
+
+curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+
+sudo mv /tmp/eksctl /usr/local/bin
+
+eksctl version
+
+#install kubectl
+curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+
+chmod +x ./kubectl
+
+sudo mv ./kubectl /usr/local/bin/kubectl
+
+kubectl version  # this also checks if k8s cluster is running, so don't worry about the error
+
+eksctl create cluster \
+--name prod \
+--version 1.12 \
+--nodegroup-name standard-workers \
+#--node-type t3.medium \
+--node-type t2.micro \
+--nodes 2 \
+--nodes-min 1 \
+--nodes-max 3 \
+--node-ami auto
