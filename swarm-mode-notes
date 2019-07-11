@@ -8,10 +8,10 @@ sudo systemctl enable docker
 
 #these are sample ip addresses
 export swm_mgr=52.77.224.95
-export swm_node1=52.221.235.167
-export swm_node2=3.0.52.2
+export swm_node1=18.138.58.180
+export swm_node2=18.139.163.115
 
-#enable ports
+#enable ports on security group (firewall)
 # TCP port 2377 for cluster management communications
 # TCP and UDP port 7946 for communication among nodes
 # UDP port 4789 for overlay network traffic
@@ -31,4 +31,10 @@ docker service ls
 
 docker service inspect --pretty helloworld
 
-# to be continued
+# scale the service
+#docker service scale <SERVICE-ID>=<NUMBER-OF-TASKS>
+docker service scale helloworld=5
+
+# Delete the service running on the swarm
+docker service rm helloworld
+
