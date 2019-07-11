@@ -12,7 +12,7 @@ $ docker-machine --version
 docker-machine version 0.16.0, build 702c267f
 
 $ cat ~/mymach.sh
-export AWS_ACCESS_KEY_ID=AKIAXRESH5VMLG2TLIOJ
+export AWS_ACCESS_KEY_ID=your_access_key
 export AWS_SECRET_ACCESS_KEY=your_secret_key
 export AWS_VPC_ID=vpc-74437e13
 export AWS_DEFAULT_REGION=ap-southeast-1
