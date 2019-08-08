@@ -264,6 +264,8 @@ oucypohey6xd         \_ redis.2         redis:3.0.6         ip-172-31-26-67.ap-s
 fg0q4autyzh8        redis.3             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 46 seconds ago
 yygz7vzginim         \_ redis.3         redis:3.0.6         ip-172-31-17-253.ap-southeast-1.compute.internal   Shutdown            Shutdown 47 seconds ago
 
+# Let's drain a node
+
 [ec2-user@swarm_manager ~]$ docker node update --availability drain ip-172-31-26-67.ap-southeast-1.compute.internal
 ip-172-31-26-67.ap-southeast-1.compute.internal
 
