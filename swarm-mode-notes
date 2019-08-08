@@ -7,7 +7,7 @@ sudo systemctl restart docker
 sudo systemctl enable docker
 
 #these are sample ip addresses
-export swm_mgr=52.77.224.95
+export SWM_MGR=52.77.224.95
 export swm_node1=18.138.58.180
 export swm_node2=18.139.163.115
 
@@ -16,25 +16,280 @@ export swm_node2=18.139.163.115
 # TCP and UDP port 7946 for communication among nodes
 # UDP port 4789 for overlay network traffic
 
-docker swarm init --advertise-addr $swm_mgr
+# need to have *AT LEAST* 2 machines: a node as manager and another as worker
 
-docker info
+# Some preparatons on all nodes (manager and workers)
+# These commands are amazonlinux-specific
+sudo yum update -y
+sudo yum install -y docker
+sudo service docker start
+sudo chkconfig docker on
+sudo userod -aG docker ec2-user
 
-docker node ls
+## initial creation of the swarm
+[ec2-user@swarm_manager ~]$ docker swarm init --advertise-addr $SWM_MGR
+Swarm initialized: current node (8lspxsd08n41yeo22m0t7iuij) is now a manager.
 
-docker swarm join-token worker   # to generate the token for workers to join the swarm
+To add a worker to this swarm, run the following command:
 
-# deploy a service
-docker service create --replicas 1 --name helloworld alpine ping docker.com
+    docker swarm join --token SWMTKN-1-3p02v8xacq16nx4nw6r2hfp5361e0thncgcppitn7uepdxcemk-89y7wpzmmi0nbr6xi58n641q8 3.112.218.36:2377
 
-docker service ls
+To add a manager to this swarm, run 'docker swarm join-token manager' and follow the instructions.
 
-docker service inspect --pretty helloworld
+## run the docker info command on manager node
+[ec2-user@all_nodes ~]$ docker info
+...
+Swarm: active
+ NodeID: no81smpmz0eb39pxqlie3axox
+ Is Manager: true
+ ClusterID: qxn2funxcnnagw7x0uhpi28cd
+ Managers: 1
+ Nodes: 1
+...
 
-# scale the service
-#docker service scale <SERVICE-ID>=<NUMBER-OF-TASKS>
-docker service scale helloworld=5
+### on the worker nodes, copy the command above -- docker swarm join
+[ec2-user@swarm_node1 ~]$ docker swarm join --token SWMTKN-1-3p02v8xacq16nx4nw6r2hfp5361e0thncgcppitn7uepdxcemk-89y7wpzmmi0nbr6xi58n641q8 3.112.218.36:2377
+This node joined a swarm as a worker.
 
-# Delete the service running on the swarm
-docker service rm helloworld
+[ec2-user@swarm_node1 ~]$ docker info
+...
+Swarm: active
+ NodeID: kpz1paajzee9k461mjnavw63m
+ Is Manager: false
+ Node Address: 172.31.17.253
+ Manager Addresses:
+  18.136.101.152:2377
+...
 
+## on the manager node, check the nodes
+[ec2-user@swarm_manager ~]$ docker node ls
+ID                            HOSTNAME                                           STATUS              AVAILABILITY        MANAGER STATUS      ENGINE VERSION
+kpz1paajzee9k461mjnavw63m     ip-172-31-17-253.ap-southeast-1.compute.internal   Ready               Active                                  18.06.1-ce
+no81smpmz0eb39pxqlie3axox *   ip-172-31-26-67.ap-southeast-1.compute.internal    Ready               Active              Leader              18.06.1-ce
+
+
+# Let's create out first service.  All succeeding commands are run on the manager node
+
+## create one instance of a service.  We'll give it the name helloworld
+[ec2-user@swarm_manager ~]$ docker service create --replicas 1 --name helloworld alpine ping docker.com
+tejak5pdladsf8h4mogy206ct
+overall progress: 1 out of 1 tasks
+1/1: running
+verify: Service converged
+
+## check for the service
+[ec2-user@swarm_manager ~]$ docker service ls
+ID                  NAME                MODE                REPLICAS            IMAGE               PORTS
+tejak5pdlads        helloworld          replicated          1/1                 alpine:latest
+
+## check on which instance the helloworld service is running on
+[ec2-user@swarm_manager ~]$ docker service ps helloworld
+ID                  NAME                IMAGE               NODE                                               DESIRED STATE       CURRENT STATE           ERROR               PORTS
+fp8kisamhatk        helloworld.1        alpine:latest       ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 2 minutes ago        
+
+## Look at the service configuration
+[ec2-user@swarm_manager ~]$ docker service inspect --pretty helloworld
+
+ID:             tejak5pdladsf8h4mogy206ct
+Name:           helloworld
+Service Mode:   Replicated
+ Replicas:      1
+Placement:
+UpdateConfig:
+ Parallelism:   1
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Update order:      stop-first
+RollbackConfig:
+ Parallelism:   1
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Rollback order:    stop-first
+ContainerSpec:
+ Image:         alpine:latest@sha256:6a92cd1fcdc8d8cdec60f33dda4db2cb1fcdcacf3410a8e05b3741f44a9b5998
+ Args:          ping docker.com
+ Init:          false
+Resources:
+Endpoint Mode:  vip
+
+## Let's increase the number of service instances
+[ec2-user@swarm_manager ~]$ docker service scale helloworld=3
+helloworld scaled to 3
+overall progress: 3 out of 3 tasks
+1/3: running
+2/3: running
+3/3: running
+verify: Service converged
+
+[ec2-user@swarm_manager ~]$ docker service inspect --pretty helloworld
+
+ID:             tejak5pdladsf8h4mogy206ct
+Name:           helloworld
+Service Mode:   Replicated
+ Replicas:      3
+Placement:
+UpdateConfig:
+ Parallelism:   1
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Update order:      stop-first
+RollbackConfig:
+ Parallelism:   1
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Rollback order:    stop-first
+ContainerSpec:
+ Image:         alpine:latest@sha256:6a92cd1fcdc8d8cdec60f33dda4db2cb1fcdcacf3410a8e05b3741f44a9b5998
+ Args:          ping docker.com
+ Init:          false
+Resources:
+Endpoint Mode:  vip
+
+## check on which machines these service instances are running
+[ec2-user@swarm_manager ~]$ docker service ps helloworld
+ID                  NAME                IMAGE               NODE                                               DESIRED STATE       CURRENT STATE            ERROR               PORTS
+fp8kisamhatk        helloworld.1        alpine:latest       ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 16 seconds ago
+b6siabiv2g7w        helloworld.2        alpine:latest       ip-172-31-26-67.ap-southeast-1.compute.internal    Running             Running 11 seconds ago
+tnov0in7r9ev        helloworld.3        alpine:latest       ip-172-31-26-67.ap-southeast-1.compute.internal    Running             Running 11 seconds ago
+
+## remove the service
+[ec2-user@swarm_manager ~]$ docker service rm helloworld
+helloworld
+
+[ec2-user@swarm_manager ~]$ docker service ls
+ID                  NAME                MODE                REPLICAS            IMAGE               PORTS
+
+## Let's perform a rolling update
+
+[ec2-user@swarm_manager ~]$ docker service create \
+   --replicas 3 \
+   --name redis \
+   --update-delay 20s \
+   redis:3.0.6
+pglrypjsnb5sj8ftz630w96mh
+overall progress: 3 out of 3 tasks
+1/3: running   [==================================================>]
+2/3: running   [==================================================>]
+3/3: running   [==================================================>]
+verify: Service converged
+
+## --update-delay can be Ts, Tm and/or Th.  Example, 1h30m30s is 1 hour 30 minutes and 30 seconds
+
+## Inspect the redis service
+[ec2-user@swarm_manager ~]$ docker service inspect --pretty redis
+
+ID:             pglrypjsnb5sj8ftz630w96mh
+Name:           redis
+Service Mode:   Replicated
+ Replicas:      3
+Placement:
+UpdateConfig:
+ Parallelism:   1
+ Delay:         20s
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Update order:      stop-first
+RollbackConfig:
+ Parallelism:   1
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Rollback order:    stop-first
+ContainerSpec:
+ Image:         redis:3.0.6@sha256:6a692a76c2081888b589e26e6ec835743119fe453d67ecf03df7de5b73d69842
+ Init:          false
+Resources:
+Endpoint Mode:  vip
+
+## Perform the update on the redis service.  You can open a different Unix terminal to the manager node and run a 'docker inspect...' command.
+[ec2-user@swarm_manager ~]$ docker service update --image redis:3.0.7 redis
+redis
+overall progress: 3 out of 3 tasks
+1/3: running   [==================================================>]
+2/3: running   [==================================================>]
+3/3: running   [==================================================>]
+verify: Service converged
+
+## In the other manager terminal, you can run:
+[ec2-user@swarm_manager ~]$ docker service inspect --pretty redis
+
+ID:             pglrypjsnb5sj8ftz630w96mh
+Name:           redis
+Service Mode:   Replicated
+ Replicas:      3
+UpdateStatus:
+ State:         updating
+ Started:       34 seconds ago
+ Message:       update in progress
+Placement:
+UpdateConfig:
+ Parallelism:   1
+ Delay:         10s
+ On failure:    pause
+ Monitoring Period: 5s
+ Max failure ratio: 0
+ Update order:      stop-first
+...
+
+## if you run the inspect command again, you'll may see something like:
+ID:             pglrypjsnb5sj8ftz630w96mh
+Name:           redis
+Service Mode:   Replicated
+ Replicas:      3
+UpdateStatus:
+ State:         completed
+ Started:       56 seconds ago
+ Completed:     16 seconds ago
+ Message:       update completed
+Placement:
+...
+
+## if the State: paused, you can restart the update by:
+## docker service update redis
+
+## back to your first manager terminal,
+
+## check the service instances
+[ec2-user@swarm_manager ~]$ docker service ps redis
+ID                  NAME                IMAGE               NODE                                               DESIRED STATE       CURRENT STATE             ERROR               PORTS
+nfg4kcswx16q        redis.1             redis:3.0.7         ip-172-31-26-67.ap-southeast-1.compute.internal    Running             Running 58 seconds ago
+ri9yktk8ic0b         \_ redis.1         redis:3.0.6         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 58 seconds ago
+knf2n902310h        redis.2             redis:3.0.7         ip-172-31-26-67.ap-southeast-1.compute.internal    Running             Running 34 seconds ago
+oucypohey6xd         \_ redis.2         redis:3.0.6         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 35 seconds ago
+fg0q4autyzh8        redis.3             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 46 seconds ago
+yygz7vzginim         \_ redis.3         redis:3.0.6         ip-172-31-17-253.ap-southeast-1.compute.internal   Shutdown            Shutdown 47 seconds ago
+
+[ec2-user@swarm_manager ~]$ docker node update --availability drain ip-172-31-26-67.ap-southeast-1.compute.internal
+ip-172-31-26-67.ap-southeast-1.compute.internal
+
+[ec2-user@swarm_manager ~]$ docker node inspect --pretty ip-172-31-26-67.ap-southeast-1.compute.internal
+ID:                     no81smpmz0eb39pxqlie3axox
+Hostname:               ip-172-31-26-67.ap-southeast-1.compute.internal
+Joined at:              2019-08-08 03:53:11.495186507 +0000 utc
+Status:
+ State:                 Ready
+ Availability:          Drain
+ Address:               18.136.101.152
+Manager Status:
+ Address:               18.136.101.152:2377
+ Raft Status:           Reachable
+ Leader:                Yes
+...
+
+[ec2-user@swarm_manager ~]$ docker service ps redis
+ID                  NAME                IMAGE               NODE                                               DESIRED STATE       CURRENT STATE             ERROR               PORTS
+if75463yglyd        redis.1             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 16 seconds ago
+nfg4kcswx16q         \_ redis.1         redis:3.0.7         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 16 seconds ago
+ri9yktk8ic0b         \_ redis.1         redis:3.0.6         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 7 minutes ago
+vlpivhbuv8dp        redis.2             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 16 seconds ago
+knf2n902310h         \_ redis.2         redis:3.0.7         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 16 seconds ago
+oucypohey6xd         \_ redis.2         redis:3.0.6         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 7 minutes ago
+fg0q4autyzh8        redis.3             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 7 minutes ago
+yygz7vzginim         \_ redis.3         redis:3.0.6         ip-172-31-17-253.ap-southeast-1.compute.internal   Shutdown            Shutdown 7 minutes ago
+
+## The swarm manager maintains the desired state (REPLICAS=3) by ending the task on a node with Drain availability and creating a new task on a node with Active availability.
