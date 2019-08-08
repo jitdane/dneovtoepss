@@ -236,7 +236,7 @@ UpdateConfig:
  Update order:      stop-first
 ...
 
-## if you run the inspect command again, you'll may see something like:
+## if you run the inspect command again, you may see something like:
 ID:             pglrypjsnb5sj8ftz630w96mh
 Name:           redis
 Service Mode:   Replicated
@@ -263,35 +263,3 @@ knf2n902310h        redis.2             redis:3.0.7         ip-172-31-26-67.ap-s
 oucypohey6xd         \_ redis.2         redis:3.0.6         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 35 seconds ago
 fg0q4autyzh8        redis.3             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 46 seconds ago
 yygz7vzginim         \_ redis.3         redis:3.0.6         ip-172-31-17-253.ap-southeast-1.compute.internal   Shutdown            Shutdown 47 seconds ago
-
-# Let's drain a node
-
-[ec2-user@swarm_manager ~]$ docker node update --availability drain ip-172-31-26-67.ap-southeast-1.compute.internal
-ip-172-31-26-67.ap-southeast-1.compute.internal
-
-[ec2-user@swarm_manager ~]$ docker node inspect --pretty ip-172-31-26-67.ap-southeast-1.compute.internal
-ID:                     no81smpmz0eb39pxqlie3axox
-Hostname:               ip-172-31-26-67.ap-southeast-1.compute.internal
-Joined at:              2019-08-08 03:53:11.495186507 +0000 utc
-Status:
- State:                 Ready
- Availability:          Drain
- Address:               18.136.101.152
-Manager Status:
- Address:               18.136.101.152:2377
- Raft Status:           Reachable
- Leader:                Yes
-...
-
-[ec2-user@swarm_manager ~]$ docker service ps redis
-ID                  NAME                IMAGE               NODE                                               DESIRED STATE       CURRENT STATE             ERROR               PORTS
-if75463yglyd        redis.1             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 16 seconds ago
-nfg4kcswx16q         \_ redis.1         redis:3.0.7         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 16 seconds ago
-ri9yktk8ic0b         \_ redis.1         redis:3.0.6         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 7 minutes ago
-vlpivhbuv8dp        redis.2             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 16 seconds ago
-knf2n902310h         \_ redis.2         redis:3.0.7         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 16 seconds ago
-oucypohey6xd         \_ redis.2         redis:3.0.6         ip-172-31-26-67.ap-southeast-1.compute.internal    Shutdown            Shutdown 7 minutes ago
-fg0q4autyzh8        redis.3             redis:3.0.7         ip-172-31-17-253.ap-southeast-1.compute.internal   Running             Running 7 minutes ago
-yygz7vzginim         \_ redis.3         redis:3.0.6         ip-172-31-17-253.ap-southeast-1.compute.internal   Shutdown            Shutdown 7 minutes ago
-
-## The swarm manager maintains the desired state (REPLICAS=3) by ending the task on a node with Drain availability and creating a new task on a node with Active availability.
